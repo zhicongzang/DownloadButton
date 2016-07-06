@@ -8,6 +8,7 @@
 
 import UIKit
 
+
 let playImage = UIImage(named: "Play")
 let stopImage = UIImage(named: "Stop")
 let downloadImage = UIImage(named: "Download")
@@ -63,32 +64,37 @@ class DownloadButton: UIControl {
     private(set) var buttonState: DownloadButtonState = .Paused {
         didSet {
             if oldValue != buttonState {
-                switch buttonState {
-                case .Paused:
-                    circleLayer.hidden = true
-                    imageLayer.contents = downloadImage?.CGImage
-                case .Downloading:
-                    circleLayer.hidden = false
-                    imageLayer.contents = stopImage?.CGImage
-                case .Downloaded:
-                    circleLayer.hidden = true
-                    imageLayer.contents = playImage?.CGImage
-                }
+                dispatch_async(dispatch_get_main_queue(), {
+                    switch self.buttonState {
+                    case .Paused:
+                        self.circleLayer.hidden = true
+                        self.imageLayer.contents = downloadImage?.CGImage
+                    case .Downloading:
+                        self.circleLayer.hidden = false
+                        self.imageLayer.contents = stopImage?.CGImage
+                    case .Downloaded:
+                        self.circleLayer.hidden = true
+                        self.imageLayer.contents = playImage?.CGImage
+                        
+                    }
+                })
+                
             }
         }
     }
     
     private var progress: Float = 0 {
         didSet {
-            progress = min(max(progress,0.0), 1.0)
             if oldValue != progress && progress < 1.0 {
-                updateProgress()
+                updateProgress(fromValue: oldValue, toValue: progress)
             }
             if progress == 1.0{
                 completeProgressing()
             }
         }
     }
+    
+    private var animated: Bool = true
     
     override init(frame: CGRect) {
         fillColor = DownloadButton.defaultFillColor
@@ -131,19 +137,36 @@ class DownloadButton: UIControl {
     }
     
     func setProgress(progress: Float) {
-        self.progress = progress
+        self.progress = min(max(progress,0.0), 1.0)
     }
     
-    private func updateProgress() {
-        circleLayer.strokeEnd = CGFloat(progress)
+    private func updateProgress(fromValue fromValue: Float, toValue: Float) {
+        if animated {
+            CATransaction.begin()
+            let animation = CABasicAnimation(keyPath: "strokeEnd")
+            animation.duration = 0.15
+            if circleLayer.animationKeys()?.count > 0 {
+                animation.fromValue = circleLayer.presentationLayer()!.strokeEnd
+                circleLayer.strokeEnd = circleLayer.presentationLayer()!.strokeEnd
+                circleLayer.removeAllAnimations()
+            } else {
+                animation.fromValue = CGFloat(fromValue)
+            }
+            
+            animation.toValue = CGFloat(toValue)
+            circleLayer.addAnimation(animation, forKey: "strokeEnd")
+            CATransaction.commit()
+        }
+        
     }
     
     @objc private func touchDown(sender: DownloadButton) {
-        touchDownAnimationWithScaleFactor(xScaleFactor: 0.8, yScaleFactor: 0.8, duration: 0.15)
+        self.animated = false
+        self.touchDownAnimationWithScaleFactor(xScaleFactor: 0.8, yScaleFactor: 0.8, duration: 0.05)
     }
     
     @objc private func touchUp(sender: DownloadButton) {
-        touchUpAnimation(duration: 0.15)
+        self.touchUpAnimation(duration: 0.05)
     }
     
     func completeProgressing() {
@@ -157,7 +180,7 @@ class DownloadButton: UIControl {
     func pauseProgressing() {
         buttonState = .Paused
     }
-
+    
 }
 
 
@@ -173,7 +196,7 @@ extension DownloadButton {
         UIView.animateWithDuration(duration, delay: 0, options: UIViewAnimationOptions.CurveEaseInOut, animations: {
             self.transform = CGAffineTransformMakeScale(1, 1)
             self.alpha = 1
-            }, completion: nil)
+            }, completion: {_ in self.animated = true})
     }
 }
 
