@@ -8,14 +8,28 @@
 
 import UIKit
 
+let playImage = UIImage(named: "Play")
+let stopImage = UIImage(named: "Stop")
+let downloadImage = UIImage(named: "Download")
+let deleteImage = UIImage(named: "Delete")
+
+enum DownloadButtonState {
+    case Paused
+    case Downloading
+    case Downloaded
+}
+
 @IBDesignable
-class DownloadButton: UIView {
+class DownloadButton: UIControl {
     
     static let defaultFillColor = UIColor.clearColor()
     static let defaultLineColor = UIColor.blackColor()
     static let defaultLineWidth: CGFloat = 3.0
+    static let defaultImageZoom: CGFloat = 0.6
     
     private var circleLayer: CAShapeLayer = CAShapeLayer()
+    
+    private var imageLayer: CALayer = CALayer()
     
     @IBInspectable
     var fillColor: UIColor = UIColor.clearColor() {
@@ -38,9 +52,41 @@ class DownloadButton: UIView {
         }
     }
     
-    var progress: Float = 0 {
+    @IBInspectable
+    var imageZoom: CGFloat = 0.8 {
         didSet {
-            updateProgress()
+            imageZoom = min(max(0.0, imageZoom), 1.0)
+            imageLayer.frame = CGRect(x: frame.size.width * (1 - imageZoom) / 2, y: frame.size.height * (1 - imageZoom) / 2, width: frame.size.width * imageZoom, height: frame.size.height * imageZoom)
+        }
+    }
+    
+    private(set) var buttonState: DownloadButtonState = .Paused {
+        didSet {
+            if oldValue != buttonState {
+                switch buttonState {
+                case .Paused:
+                    circleLayer.hidden = true
+                    imageLayer.contents = downloadImage?.CGImage
+                case .Downloading:
+                    circleLayer.hidden = false
+                    imageLayer.contents = stopImage?.CGImage
+                case .Downloaded:
+                    circleLayer.hidden = true
+                    imageLayer.contents = playImage?.CGImage
+                }
+            }
+        }
+    }
+    
+    private var progress: Float = 0 {
+        didSet {
+            progress = min(max(progress,0.0), 1.0)
+            if oldValue != progress && progress < 1.0 {
+                updateProgress()
+            }
+            if progress == 1.0{
+                completeProgressing()
+            }
         }
     }
     
@@ -48,6 +94,7 @@ class DownloadButton: UIView {
         fillColor = DownloadButton.defaultFillColor
         lineColor = DownloadButton.defaultLineColor
         lineWidth = DownloadButton.defaultLineWidth
+        imageZoom = DownloadButton.defaultImageZoom
         super.init(frame: frame)
         setup()
     }
@@ -56,6 +103,7 @@ class DownloadButton: UIView {
         fillColor = DownloadButton.defaultFillColor
         lineColor = DownloadButton.defaultLineColor
         lineWidth = DownloadButton.defaultLineWidth
+        imageZoom = DownloadButton.defaultImageZoom
         super.init(coder: aDecoder)
         setup()
     }
@@ -64,18 +112,87 @@ class DownloadButton: UIView {
         self.init(frame: CGRect.zero)
     }
     
-    func setup() {
-        let circlePath = UIBezierPath(arcCenter: CGPoint(x: frame.size.width / 2.0, y: frame.size.height / 2.0), radius: (frame.size.width - 10)/2, startAngle: -CGFloat(M_PI / 2.0), endAngle: CGFloat(M_PI * 1.5), clockwise: true)
+    private func setup() {
+        imageLayer.contents = downloadImage?.CGImage
+        layer.addSublayer(imageLayer)
+        
+        let circlePath = UIBezierPath(arcCenter: CGPoint(x: frame.size.width / 2.0, y: frame.size.height / 2.0), radius: (frame.size.width - lineWidth)/2, startAngle: -CGFloat(M_PI / 2.0), endAngle: CGFloat(M_PI * 1.5), clockwise: true)
         circleLayer.path = circlePath.CGPath
         circleLayer.fillColor = fillColor.CGColor
         circleLayer.strokeColor = lineColor.CGColor
         circleLayer.lineWidth = lineWidth
         circleLayer.strokeEnd = 0
         layer.addSublayer(circleLayer)
+        
+        
+        self.addTarget(self, action: #selector(DownloadButton.touchDown(_:)), forControlEvents: UIControlEvents.TouchDown)
+        self.addTarget(self, action: #selector(DownloadButton.touchUp(_:)), forControlEvents: UIControlEvents.TouchUpInside)
+        self.addTarget(self, action: #selector(DownloadButton.touchUp(_:)), forControlEvents: UIControlEvents.TouchDragExit)
     }
     
-    func updateProgress() {
-        circleLayer.strokeEnd = min(max(CGFloat(progress),0.0), 1.0)
+    func setProgress(progress: Float) {
+        self.progress = progress
+    }
+    
+    private func updateProgress() {
+        circleLayer.strokeEnd = CGFloat(progress)
+    }
+    
+    @objc private func touchDown(sender: DownloadButton) {
+        touchDownAnimationWithScaleFactor(xScaleFactor: 0.8, yScaleFactor: 0.8, duration: 0.15)
+    }
+    
+    @objc private func touchUp(sender: DownloadButton) {
+        touchUpAnimation(duration: 0.15)
+    }
+    
+    func completeProgressing() {
+        buttonState = .Downloaded
+    }
+    
+    func startProgressing() {
+        buttonState = .Downloading
+    }
+    
+    func pauseProgressing() {
+        buttonState = .Paused
     }
 
 }
+
+
+
+extension DownloadButton {
+    private func touchDownAnimationWithScaleFactor(xScaleFactor xScaleFactor: CGFloat, yScaleFactor: CGFloat, duration: CFTimeInterval) {
+        UIView.animateWithDuration(duration, delay: 0, options: UIViewAnimationOptions.CurveEaseInOut, animations: {
+            self.transform = CGAffineTransformMakeScale(xScaleFactor, yScaleFactor)
+            self.alpha = 0.8
+            }, completion: nil)
+    }
+    private func touchUpAnimation(duration duration: CFTimeInterval) {
+        UIView.animateWithDuration(duration, delay: 0, options: UIViewAnimationOptions.CurveEaseInOut, animations: {
+            self.transform = CGAffineTransformMakeScale(1, 1)
+            self.alpha = 1
+            }, completion: nil)
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
